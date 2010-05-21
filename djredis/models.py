@@ -80,13 +80,20 @@ def _set_object(key):
 def _get_list(key):
     def get_list(self):
         full_key = '%s:%s' % (self.redis_key(), key)
-        return db[full_key]
+        return db.api.lrange(full_key, 0, db.api.llen(full_key))
     return get_list
 
 def _lpush(key):
     def lpush(self, value):
         full_key = '%s:%s' % (self.redis_key(), key)
-        return db.api.lpush(full_key, val
+        return db.api.lpush(full_key, value)
+    return lpush
+
+def _rpush(key):
+    def rpush(self, value):
+        full_key = '%s:%s' % (self.redis_key(), key)
+        return db.api.rpush(full_key, value)
+    return rpush
 
 
 
@@ -133,3 +140,6 @@ class DredisMixin(object):
     def add_list(cls, key):
         cls.add_to_class(key, _get_list(key))
         cls.add_to_class('%s_lpush' % key, _lpush(key))
+        cls.add_to_class('%s_rpush' % key, _rpush(key))
+
+
