@@ -14,7 +14,7 @@ db_json = Client(serializer=serialization.JSON())
 
 
 #####
-Incr/Decr
+#Incr/Decr
 ###########
 def _make_get_value(key):
     def foo(self):
@@ -35,7 +35,7 @@ def _make_decr(key):
     return foo
 
 #####
-String
+#String
 #############
 
 def _make_get(key):
