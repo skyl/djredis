@@ -4,13 +4,13 @@ Add redis fields to your django models.
 The DredisMixin
 ===============
 
-Using the DredisMixin is shown below.  Add a method, ``redis_key`` to your modelclass
+Using the DredisMixin is shown below.  Optionally add a method, ``redis_key`` to your modelclass
 that returns the unique keyspace for the instance.
 
 ::
 
 
-  from djredish.models import DredisMixin
+  from djredis.models import DredisMixin
 
   class Blog(models.Model, DredisMixin): # inherit from the mixin class
       author = models.ForeignKey('Author')
