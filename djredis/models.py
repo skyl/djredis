@@ -63,6 +63,15 @@ def _exists_string(key):
         return db.api.exists(full_key)
     return exists
 
+def _save_string(key, persist_field):
+    def redis_save(self):
+        full_key = '%s:%s' % (self.redis_key(), key)
+        value = db.api.get(full_key) if db.api.get(full_key) else ''
+        setattr(self, persist_field, value)
+        self.save()
+    return redis_save
+
+
 ####
 #Object
 #########
@@ -85,26 +94,27 @@ def _set_object(key):
 
 ####
 #List
-#####
+#######
 
 def _get_list(key):
     def get_list(self):
         full_key = '%s:%s' % (self.redis_key(), key)
-        return db.api.lrange(full_key, 0, db.api.llen(full_key))
+        return db.List(full_key)
     return get_list
 
 def _lpush(key):
     def lpush(self, value):
         full_key = '%s:%s' % (self.redis_key(), key)
-        return db.api.lpush(full_key, value)
+        db.List(full_key).appendleft(value)
+        return db.List(full_key)
     return lpush
 
 def _rpush(key):
     def rpush(self, value):
         full_key = '%s:%s' % (self.redis_key(), key)
-        return db.api.rpush(full_key, value)
+        db.List(full_key).append(value)
+        return db.List(full_key)
     return rpush
-
 
 
 class DredisMixin(object):
@@ -141,10 +151,12 @@ class DredisMixin(object):
             cls.add_to_class('%s_save' % key, _save_incr(key, persist_field))
 
     @classmethod
-    def add_string(cls, key):
+    def add_string(cls, key, persist_field=None):
         cls.add_to_class(key, _get_string(key))
         cls.add_to_class('%s_append' % key, _append_string(key))
         cls.add_to_class('%s_exists' % key, _exists_string(key))
+        if persist_field:
+            cls.add_to_class('%s_save' % key, _save_string(key, persist_field))
 
     @classmethod
     def add_object(cls, key):
