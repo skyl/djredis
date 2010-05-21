@@ -33,6 +33,14 @@ def _make_decr(key):
         return db.api.decr(full_key)
     return decr
 
+def _make_save(key, persist_field):
+    def redis_save(self):
+        full_key = '%s:%s' % (self.redis_key(), key)
+        value = int(db.api.get(full_key)) if db.api.get(full_key) else None
+        setattr(self, persist_field, value)
+        self.save()
+    return redis_save
+
 #####
 #String
 #############
@@ -125,10 +133,12 @@ class DredisMixin(object):
         return '%s:%s:%s' % (self._meta.app_label, self._meta.module_name, self.id)
 
     @classmethod
-    def add_incr(cls, key):
+    def add_incr(cls, key, persist_field=None):
         cls.add_to_class(key, _make_get_value(key))
         cls.add_to_class('%s_incr' % key, _make_incr(key))
         cls.add_to_class('%s_decr' % key, _make_decr(key))
+        if persist_field:
+            cls.add_to_class('%s_save' % key, _make_save(key, persist_field))
 
     @classmethod
     def add_string(cls, key):

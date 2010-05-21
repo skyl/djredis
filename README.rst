@@ -45,6 +45,34 @@ Using you model from the shell, instances should now have these new attrs:
     >>> b.viewcount_decr()
     1
 
+You may create a field in your model to persist the data in your rdbms.
+Pass the name of this field as a string to ``.add_incr`` and you get another method, ``_save()``.
+Checkout out the same example modified to use this functionality::
+
+  from djredis.models import DredisMixin
+
+  class Blog(models.Model, DredisMixin): # inherit from the mixin class
+      ...
+      views = models.PositiveIntegerField(blank=True, null=True)
+      ...
+
+  Blog.add_incr('viewcount', 'views') # add the viewcount methods to your instances
+
+Now you can save the number to the rdbms when you want::
+
+    >>> b=Blog.objects.all()[0] # get an object that is already in the db
+    >>> b.viewcount()
+    >>> b.viewcount_incr()
+    1
+    >>> b.viewcount_incr()
+    2
+    >>> b.views # still none until we save
+    >>> b.viewcount_save()
+    >>> b.views # now that we have saved, we get the number back
+    2
+    >>> Blog.objects.all().order_by('views') # and we can use the ORM on this field
+
+
 Other types of fields
 ~~~~~~~~~~~~~~~~~~~~~
 
