@@ -15,25 +15,25 @@ db = Client(serializer=serialization.Pickler())
 #####
 #Incr/Decr
 ###########
-def _make_get_value(key):
+def _get_incr(key):
     def get_incr_value(self):
         full_key = '%s:%s' % (self.redis_key(), key)
         return int(db.api.get(full_key)) if db.api.get(full_key) else None
     return get_incr_value
 
-def _make_incr(key):
+def _incr(key):
     def incr(self):
         full_key = '%s:%s' % (self.redis_key(), key)
         return db.api.incr(full_key)
     return incr
 
-def _make_decr(key):
+def _decr(key):
     def decr(self):
         full_key = '%s:%s' % (self.redis_key(), key)
         return db.api.decr(full_key)
     return decr
 
-def _make_save(key, persist_field):
+def _save_incr(key, persist_field):
     def redis_save(self):
         full_key = '%s:%s' % (self.redis_key(), key)
         value = int(db.api.get(full_key)) if db.api.get(full_key) else None
@@ -45,19 +45,19 @@ def _make_save(key, persist_field):
 #String
 #############
 
-def _make_get(key):
+def _get_string(key):
     def get(self):
         full_key = '%s:%s' % (self.redis_key(), key)
         return db.api.get(full_key)
     return get
 
-def _make_append(key):
+def _append_string(key):
     def append(self, value):
         full_key = '%s:%s' % (self.redis_key(), key)
         return db.api.append(full_key, value)
     return append
 
-def _make_exists(key):
+def _exists_string(key):
     def exists(self):
         full_key = '%s:%s' % (self.redis_key(), key)
         return db.api.exists(full_key)
@@ -134,17 +134,17 @@ class DredisMixin(object):
 
     @classmethod
     def add_incr(cls, key, persist_field=None):
-        cls.add_to_class(key, _make_get_value(key))
-        cls.add_to_class('%s_incr' % key, _make_incr(key))
-        cls.add_to_class('%s_decr' % key, _make_decr(key))
+        cls.add_to_class(key, _get_incr(key))
+        cls.add_to_class('%s_incr' % key, _incr(key))
+        cls.add_to_class('%s_decr' % key, _decr(key))
         if persist_field:
-            cls.add_to_class('%s_save' % key, _make_save(key, persist_field))
+            cls.add_to_class('%s_save' % key, _save_incr(key, persist_field))
 
     @classmethod
     def add_string(cls, key):
-        cls.add_to_class(key, _make_get(key))
-        cls.add_to_class('%s_append' % key, _make_append(key))
-        cls.add_to_class('%s_exists' % key, _make_exists(key))
+        cls.add_to_class(key, _get_string(key))
+        cls.add_to_class('%s_append' % key, _append_string(key))
+        cls.add_to_class('%s_exists' % key, _exists_string(key))
 
     @classmethod
     def add_object(cls, key):
