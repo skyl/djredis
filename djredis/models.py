@@ -7,9 +7,9 @@ from redish import serialization
 
 # override and divide and balance with settings?
 # db = Client(host="localhost", port=6379, db="") # default settings.
-db = Client()
-db_pickle = Client(serializer=serialization.Pickler())
-db_json = Client(serializer=serialization.JSON())
+#db = Client()
+db = Client(serializer=serialization.Pickler())
+#db_json = Client(serializer=serialization.JSON())
 
 
 
@@ -17,44 +17,76 @@ db_json = Client(serializer=serialization.JSON())
 #Incr/Decr
 ###########
 def _make_get_value(key):
-    def foo(self):
+    def get_incr_value(self):
         full_key = '%s:%s' % (self.redis_key(), key)
         return int(db.api.get(full_key)) if db.api.get(full_key) else None
-    return foo
+    return get_incr_value
 
 def _make_incr(key):
-    def foo(self):
+    def incr(self):
         full_key = '%s:%s' % (self.redis_key(), key)
         return db.api.incr(full_key)
-    return foo
+    return incr
 
 def _make_decr(key):
-    def foo(self):
+    def decr(self):
         full_key = '%s:%s' % (self.redis_key(), key)
         return db.api.decr(full_key)
-    return foo
+    return decr
 
 #####
 #String
 #############
 
 def _make_get(key):
-    def foo(self):
+    def get(self):
         full_key = '%s:%s' % (self.redis_key(), key)
         return db.api.get(full_key)
-    return foo
+    return get
 
 def _make_append(key):
-    def foo(self, value):
+    def append(self, value):
         full_key = '%s:%s' % (self.redis_key(), key)
         return db.api.append(full_key, value)
-    return foo
+    return append
 
 def _make_exists(key):
-    def foo(self):
+    def exists(self):
         full_key = '%s:%s' % (self.redis_key(), key)
         return db.api.exists(full_key)
-    return foo
+    return exists
+
+####
+#Object
+#########
+
+def _get_object(key):
+    def get(self):
+        full_key = '%s:%s' % (self.redis_key(), key)
+        return db[full_key]
+    return get
+
+def _set_object(key):
+    def set(self, value):
+        full_key = '%s:%s' % (self.redis_key(), key)
+        db[full_key] = value
+        #return value
+    return set
+
+####
+#List
+#####
+
+def _get_list(key):
+    def get_list(self):
+        full_key = '%s:%s' % (self.redis_key(), key)
+        return db[full_key]
+    return get_list
+
+def _lpush(key):
+    def lpush(self, value):
+        full_key = '%s:%s' % (self.redis_key(), key)
+        return db.api.lpush(full_key, val
 
 
 
@@ -88,7 +120,16 @@ class DredisMixin(object):
 
     @classmethod
     def add_string(cls, key):
-        cls.add_to_class(key, _make_get_value(key))
+        cls.add_to_class(key, _make_get(key))
         cls.add_to_class('%s_append' % key, _make_append(key))
         cls.add_to_class('%s_exists' % key, _make_exists(key))
 
+    @classmethod
+    def add_object(cls, key):
+        cls.add_to_class(key, _get_object(key))
+        cls.add_to_class('%s_set' % key, _set_object(key))
+
+    @classmethod
+    def add_list(cls, key):
+        cls.add_to_class(key, _get_list(key))
+        cls.add_to_class('%s_lpush' % key, _lpush(key))
