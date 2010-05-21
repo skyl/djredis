@@ -7,7 +7,7 @@ The DredisMixin
 Using the DredisMixin is shown below.  Add a method, ``redis_key`` to your modelclass
 that returns the unique keyspace for the instance.
 
-.. code-block::
+::
 
 
   from djredish.models import DredisMixin
@@ -32,7 +32,7 @@ The call to ``.add_incr('viewcount')`` gives us 3 methods on our instances,
 
 Using you model from the shell, instances should now have these new attrs:
 
-.. code-block::
+::
 
     >>> b = Blog()
     >>> b.viewcount()
