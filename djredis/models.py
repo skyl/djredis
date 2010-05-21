@@ -62,7 +62,10 @@ def _make_exists(key):
 def _get_object(key):
     def get(self):
         full_key = '%s:%s' % (self.redis_key(), key)
-        return db[full_key]
+        if db.api.get(full_key):
+            return db[full_key]
+        else:
+            return None
     return get
 
 def _set_object(key):
