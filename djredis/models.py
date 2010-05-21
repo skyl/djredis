@@ -1,16 +1,15 @@
 from functools import partial
 from django.db import models
 
-
 from redish.client import Client
 from redish import serialization
+
 
 # override and divide and balance with settings?
 # db = Client(host="localhost", port=6379, db="") # default settings.
 #db = Client()
 db = Client(serializer=serialization.Pickler())
 #db_json = Client(serializer=serialization.JSON())
-
 
 
 #####
@@ -104,8 +103,8 @@ class DredisMixin(object):
 
         class C(models.Model, DredisMixin):
             ...
-
-            def red_key(self):
+            # optionally add your own key
+            def redis_key(self):
                 return 'unique_space:%s' % (self.id)
 
         C.add_incr(C, 'timesfavorited')
@@ -118,6 +117,9 @@ class DredisMixin(object):
         >>> c.timesfavorited_decr()
         0
     '''
+
+    def redis_key(self):
+        return '%s:%s:%s' % (self._meta.app_label, self._meta.module_name, self.id)
 
     @classmethod
     def add_incr(cls, key):
