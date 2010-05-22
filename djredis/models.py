@@ -271,7 +271,7 @@ class DredisMixin(object):
     ###################
 
     def redis_key(self):
-        return '%s:%s:%s' % (self._meta.app_label, self._meta.module_name, self.id)
+        return '%s:%s:%s' % (self._meta.app_label, self._meta.module_name, self.pk)
 
     def redis_items(self):
         return db.items(pattern='%s*' % self.redis_key())

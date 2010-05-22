@@ -6,7 +6,9 @@ Requirements
 djredis requires redis-server, redis-py and redish.
 
 http://github.com/antirez/redis
+
 http://github.com/andymccurdy/redis-py
+
 http://github.com/ask/redish
 
 The DredisMixin Class
@@ -17,7 +19,6 @@ that returns the unique keyspace for the instance.
 
 ::
 
-
   from djredis.models import DredisMixin
 
   class Blog(models.Model, DredisMixin): # inherit from the mixin class
@@ -27,8 +28,7 @@ that returns the unique keyspace for the instance.
 
       # optionally add a unique keyspace for the instance - default is shown below
       def redis_key(self):
-          return '%s:%s:%s' % (self._meta.app_label, self._meta.module_name, self.id)
-
+          return '%s:%s:%s' % (self._meta.app_label, self._meta.module_name, self.pk)
 
   Blog.add_incr('viewcount') # add the viewcount methods to your instances
 
@@ -42,7 +42,7 @@ Using your model from the shell, instances should now have these new attrs:
 
 ::
 
-    >>> b = Blog()
+    >>> b = Blog.objects.get(..) # get a Blog instance
     >>> b.viewcount()
     0
     >>> b.viewcount_incr()
@@ -53,6 +53,18 @@ Using your model from the shell, instances should now have these new attrs:
     2
     >>> b.viewcount_decr()
     1
+
+Note that you should not run your redis methods on unsaved model instances.
+The pk is used in building the redis key.  So, running the
+methods on unsaved instances will save the data in redis under say,
+``content:blog:None`` instead of say ``content:blog:53``::
+
+    >>> b = Blog()
+    >>> b.mylist().append('bar')
+    >>> b.redis_keys()
+    ['content:blog:None:mylist']
+
+This behavior serves no apparent purpose and will probably be changed.
 
 You may create a field in your model to persist the data in your rdbms.
 Pass the name of this field as a string to ``.add_incr`` and you get another method, ``_save()``.
@@ -85,7 +97,6 @@ Now you can save the number to the rdbms when you want::
 
 Other types of fields
 ~~~~~~~~~~~~~~~~~~~~~
-
 
 ``MyModel.add_string('fieldname', persist_field=None)`` corresponds to string values
 that are not serialized with pickle::
@@ -194,4 +205,24 @@ redish.types.SortedSet::
     MyModels.add_zset_to_class('myzset')
     MyModel.myzset() # returns the SortedSet object
 
+
+Base methods
+~~~~~~~~~~~~
+
+Some methods are added to your class and instances by using the mixin.
+These methods are added without further action.
+
+Instance methods
+----------------
+
+``redis_key``.  Returns the unique key for the instance.
+
+``redis_keys``.  Returns the existing keys in the db for the instance.
+
+``redis_items``.  Returns the items (list of (k,v) pairs
+
+Class methods
+-------------
+
+``redis_base``.  Returns the unique key for the modelclass.
 
