@@ -165,3 +165,33 @@ available.
     MyModel.myobject_set(obj) # stores obj
     MyModel.myobject_getset(obj) # returns the stored object and sets the value to obj
 
+The following methods create callables that return redish objects.
+See the redish docs for more on how to interact with them.
+
+``add_list_to_class``.  Creates a callable on the class that returns a
+redish.types.List::
+
+    MyModel.add_list_to_class('mylist')
+    MyModel.mylist() # returns List object
+    MyModel.mylist().appendleft('foo') #appends the string to the head of the list
+    MyModel.mylist().popleft() # returns 'foo' and removes it from the db
+
+``add_dict_to_class``.  Creates a callable on the class that returns a
+redish.types.Dict::
+
+    MyModel.add_dict_to_class('mydict')
+    MyModel.mydict() # returns the Dict object
+
+``add_set_to_class``.  Creates a callable on the class that returns a
+redish.types.Set::
+
+    MyModel.add_set_to_class('myset')
+    MyModel.myset() # returns the Set object
+
+``add_zset_to_class``.  Creates a callable on the class that returns a
+redish.types.SortedSet::
+
+    MyModels.add_zset_to_class('myzset')
+    MyModel.myzset() # returns the SortedSet object
+
+

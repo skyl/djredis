@@ -78,6 +78,37 @@ def _getset_object_class(key):
         return pickle.loads(db.api.getset(full_key, pickle.dumps(obj)))
     return getset
 
+#List
+def _get_list_class(key):
+    @classmethod
+    def get_list(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        return db.List(full_key)
+    return get_list
+
+#Dict
+def _get_dict_class(key):
+    @classmethod
+    def get_dict(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        return db.Dict(full_key)
+    return get_dict
+
+#Set
+def _get_set_class(key):
+    @classmethod
+    def get_set(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        return db.Set(full_key)
+    return get_set
+
+#SortedSet
+def _get_zset_class(key):
+    @classmethod
+    def get_zset(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        return db.SortedSet(full_key)
+    return get_zset
 
 
 ######
@@ -272,6 +303,23 @@ class DredisMixin(object):
         setattr(cls, key, _get_object_class(key))
         setattr(cls, '%s_set' % key, _set_object_class(key))
         setattr(cls, '%s_getset' % key, _getset_object_class(key))
+
+    @classmethod
+    def add_list_to_class(cls, key):
+        setattr(cls, key, _get_list_class(key))
+
+    @classmethod
+    def add_dict_to_class(cls, key):
+        setattr(cls, key, _get_dict_class(key))
+
+    @classmethod
+    def add_set_to_class(cls, key):
+        setattr(cls, key, _get_set_class(key))
+
+    @classmethod
+    def add_zset_to_class(cls, key):
+        setattr(cls, key, _get_zset_class(key))
+
 
     ######
     #Add instance methods
