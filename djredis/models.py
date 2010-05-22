@@ -12,10 +12,79 @@ db = Client(serializer=serialization.Plain())
 db_pickle = Client(serializer=serialization.Pickler())
 db_json = Client(serializer=serialization.JSON())
 
+######
+#Class-level fields
+####################
 
-#####
+# INCR
+
+def _get_incr_class(key):
+    @classmethod
+    def get_incr_value(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        return int(db.api.get(full_key)) if db.api.get(full_key) else 0
+    return get_incr_value
+
+def _incr_class(key):
+    @classmethod
+    def incr_class(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        return db.api.incr(full_key)
+    return incr_class
+
+def _decr_class(key):
+    @classmethod
+    def decr_class(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        return db.api.decr(full_key)
+    return decr_class
+
+# Plain String
+
+def _get_str_class(key):
+    @classmethod
+    def get_str_class(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        if db.api.get(full_key):
+            return db[full_key]
+        else:
+            db[full_key] = ''
+            return ''
+    return get_str_class
+
+# Object
+
+def _get_object_class(key):
+    @classmethod
+    def get_object_class(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        if db.api.get(full_key):
+            return db_pickle[full_key]
+        else:
+            return None
+    return get_object_class
+
+def _set_object_class(key):
+    @classmethod
+    def set_object_class(cls, value):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        db_pickle[full_key] = value
+    return set_object_class
+
+def _getset_object_class(key):
+    @classmethod
+    def getset(cls, obj):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        return pickle.loads(db.api.getset(full_key, pickle.dumps(obj)))
+    return getset
+
+
+
+######
+#Instance-level fields
+#######################
+
 #Incr/Decr
-###########
 def _get_incr(key):
     def get_incr_value(self):
         full_key = '%s:%s' % (self.redis_key(), key)
@@ -42,9 +111,7 @@ def _save_incr(key, persist_field):
         self.save()
     return redis_save
 
-#####
 #String
-#############
 
 def _get_string(key):
     def get(self):
@@ -52,7 +119,8 @@ def _get_string(key):
         if db.api.get(full_key):
             return db[full_key]
         else:
-            return None
+            db[full_key] = ''
+            return ''
     return get
 
 def _append_string(key):
@@ -80,10 +148,7 @@ def _save_string(key, persist_field):
         self.save()
     return redis_save
 
-
-####
 #Object
-#########
 
 def _get_object(key):
     def get(self):
@@ -107,10 +172,15 @@ def _getset_object(key):
         return pickle.loads(db.api.getset(full_key, pickle.dumps(obj)))
     return getset
 
+def _save_object(key, persist_field):
+    def redis_save(self):
+        full_key = '%s:%s' % (self.redis_key(), key)
+        value = db.api.get(full_key) if db.api.get(full_key) else ''
+        setattr(self, persist_field, value)
+        self.save()
+    return redis_save
 
-####
 #List
-#######
 
 def _get_list(key):
     def get_list(self):
@@ -118,9 +188,7 @@ def _get_list(key):
         return db.List(full_key)
     return get_list
 
-####
 #Dict
-#######
 
 def _get_dict(key):
     def get_dict(self):
@@ -128,14 +196,21 @@ def _get_dict(key):
         return db.Dict(full_key)
     return get_dict
 
-####
 #Set
-######
+
 def _get_set(key):
     def get_set(self):
         full_key = '%s:%s' % (self.redis_key(), key)
         return db.Set(full_key)
     return get_set
+
+#Sorted Set
+
+def _get_zset(key):
+    def get_zset(self):
+        full_key = '%s:%s' % (self.redis_key(), key)
+        return db.SortedSet(full_key)
+    return get_zset
 
 
 class DredisMixin(object):
@@ -160,6 +235,10 @@ class DredisMixin(object):
         0
     '''
 
+    ####
+    #Base mixin methods
+    ###################
+
     def redis_key(self):
         return '%s:%s:%s' % (self._meta.app_label, self._meta.module_name, self.id)
 
@@ -168,6 +247,35 @@ class DredisMixin(object):
 
     def redis_keys(self):
         return db.keys('%s*' % self.redis_key())
+
+    @classmethod
+    def redis_base(cls):
+        return '%s:%s' % (cls._meta.app_label, cls._meta.module_name)
+
+    ###
+    #Add class methods
+    ##################
+
+    @classmethod
+    def add_incr_to_class(cls, key):
+        setattr(cls, key, _get_incr_class(key))
+        setattr(cls, '%s_incr' % key, _incr_class(key))
+        setattr(cls, '%s_decr' % key, _decr_class(key))
+
+    @classmethod
+    def add_string_to_class(cls, key):
+        setattr(cls, key, _get_str_class(key))
+
+    @classmethod
+    def add_object_to_class(cls, key):
+        '''Pickled objects'''
+        setattr(cls, key, _get_object_class(key))
+        setattr(cls, '%s_set' % key, _set_object_class(key))
+        setattr(cls, '%s_getset' % key, _getset_object_class(key))
+
+    ######
+    #Add instance methods
+    #####################
 
     @classmethod
     def add_incr(cls, key, persist_field=None):
@@ -186,11 +294,13 @@ class DredisMixin(object):
             cls.add_to_class('%s_save' % key, _save_string(key, persist_field))
 
     @classmethod
-    def add_object(cls, key):
+    def add_object(cls, key, persist_field=None):
         '''Pickled objects'''
         cls.add_to_class(key, _get_object(key))
         cls.add_to_class('%s_set' % key, _set_object(key))
         cls.add_to_class('%s_getset' % key, _getset_object(key))
+        if persist_field:
+            cls.add_to_class('%s_save' % key, _save_object(key, persist_field))
 
     @classmethod
     def add_list(cls, key):
@@ -209,5 +319,10 @@ class DredisMixin(object):
     def add_set(cls, key):
         '''<class 'redish.types.Set'>'''
         cls.add_to_class(key, _get_set(key))
+
+    @classmethod
+    def add_zset(cls, key):
+        '''<class 'redish.types.SortedSet'>'''
+        cls.add_to_class(key, _get_zset(key))
 
 

@@ -1,8 +1,16 @@
 Add redis fields to your django models.
 
+Requirements
+============
 
-The DredisMixin
-===============
+djredis requires redis-server, redis-py and redish.
+
+http://github.com/antirez/redis
+http://github.com/andymccurdy/redis-py
+http://github.com/ask/redish
+
+The DredisMixin Class
+=====================
 
 Using the DredisMixin is shown below.  Optionally add a method, ``redis_key`` to your modelclass
 that returns the unique keyspace for the instance.
@@ -30,12 +38,13 @@ The call to ``.add_incr('viewcount')`` gives us 3 methods on our instances,
 ``viewcount_incr()`` adds 1 to the viewcount, 
 ``viewcount_decr()`` subtracts 1 from the viewcount.
 
-Using you model from the shell, instances should now have these new attrs:
+Using your model from the shell, instances should now have these new attrs:
 
 ::
 
     >>> b = Blog()
     >>> b.viewcount()
+    0
     >>> b.viewcount_incr()
     1
     >>> b.viewcount_incr()
@@ -62,6 +71,7 @@ Now you can save the number to the rdbms when you want::
 
     >>> b=Blog.objects.all()[0] # get an object that is already in the db
     >>> b.viewcount()
+    0
     >>> b.viewcount_incr()
     1
     >>> b.viewcount_incr()
@@ -85,6 +95,7 @@ that are not serialized with pickle::
     inst.fieldname_exists() # True/False
     # if you supply a persist_field on your model, you can write with:
     inst.fieldname_save()
+    # more to come
 
 ``MyModel.add_object('fieldname')``.  Redis can actually store any picklable python objects::
 
@@ -102,18 +113,55 @@ that are not serialized with pickle::
     # see http://github.com/ask/redish
 
 ``MyModel.add_dict('fieldname')``.  Adds a callable at `fieldname`
-of the redish.types.Dict type::
+returning a redish.types.Dict::
 
     inst.fieldname() # returns the redish dict
+    inst.fieldname().update({'foo':'bar'})
     # work with this object directly:
     inst.fieldname().pop(dict_key) # removes the k/v at dict_key and returns the value
 
 ``MyModel.add_set('fieldname')``.  Adds a callable at `fieldname`
-of the redish.types.Set type::
+returning a redish.types.Set::
 
     inst.fieldname() # returns the redish set
     # work with this object directly
     inst.fieldname().add('somestring')
     inst.fieldname().intersection(other_set) # returns a new set
 
+``MyModel.add_zset('fieldname')``.  Adds a callable at `fieldname`
+returning a redish.types.SortedSet::
+
+    inst.fieldname() # returns the set
+    # work with this object
+    inst.fieldname().add('some string') # returns True if added else False
+
+
+Table-level fields
+~~~~~~~~~~~~~~~~~~
+
+Redis methods can also be added as classmethods.
+The same api is evolving for this.  The persist_field option does not exist
+for these calls.  To add classmethods to your class, the following methods are currently
+available.
+
+``add_incr_to_class``.  After MyModel inherits from the mixin::
+
+    MyModel.add_incr_to_class('countername')
+    MyModel.countername() # returns the number, (0 if no key in db)
+    MyModel.countername_incr() # adds 1
+    MyModel.countername_decr() # subtracts 1
+    
+
+``add_string_to_class``.  This is for adding an unpickled string field to your ModelClass::
+
+    MyModel.add_string_to_class('foostring')
+    MyModel.foostring() # returns the string
+    # more to come
+
+``add_object_to_class``.  For adding a pickled object to you ModelClass::
+
+    MyModel.add_object_to_class('myobject')
+    MyModel.myobject() # returns the stored object, None if the key has not been set.
+    MyModel.myobject_set(obj) # stores obj
+    MyModel.myobject_getset(obj) # returns the stored object and sets the value to obj
 
