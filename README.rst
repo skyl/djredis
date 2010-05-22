@@ -77,23 +77,43 @@ Other types of fields
 ~~~~~~~~~~~~~~~~~~~~~
 
 
-``MyModel.add_string('fieldname')`` supplies::
+``MyModel.add_string('fieldname', persist_field=None)`` corresponds to string values
+that are not serialized with pickle::
 
     inst.fieldname() # returns value
     inst.fieldname_append('mystr') # appends 'mystr' to the string at fieldname
     inst.fieldname_exists() # True/False
-    # more to come
+    # if you supply a persist_field on your model, you can write with:
+    inst.fieldname_save()
 
 ``MyModel.add_object('fieldname')``.  Redis can actually store any picklable python objects::
 
     inst.fieldname() # returns the object at the key.
     inst.fieldname_set({'foo': barobject}) # puts the dict in the db, objs and all
+    inst.fieldname_getset({}) # sets the field to the python object, returning the current
     # more to come
 
-``MyModel.add_list('fieldname')``.  Adds a redis list at fieldname::
+``MyModel.add_list('fieldname')``.  Adds a redish list at fieldname::
 
-    inst.fieldname() # returns the list stored at fieldname
-    inst.fieldname_lpush('somestring') # I think it's just strings right now
-    inst.fieldname_rpush('somestring')
-    # more to come
+    inst.fieldname() # returns the redish list
+    # this object can be interacted with directly:
+    inst.fieldname().append('some string')
+    inst.fieldname().appendleft('baz')
+    # see http://github.com/ask/redish
+
+``MyModel.add_dict('fieldname')``.  Adds a callable at `fieldname`
+of the redish.types.Dict type::
+
+    inst.fieldname() # returns the redish dict
+    # work with this object directly:
+    inst.fieldname().pop(dict_key) # removes the k/v at dict_key and returns the value
+
+``MyModel.add_set('fieldname')``.  Adds a callable at `fieldname`
+of the redish.types.Set type::
+
+    inst.fieldname() # returns the redish set
+    # work with this object directly
+    inst.fieldname().add('somestring')
+    inst.fieldname().intersection(other_set) # returns a new set
+
 
