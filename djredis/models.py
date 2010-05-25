@@ -211,57 +211,69 @@ def _save_object(key, persist_field):
         self.save()
     return redis_save
 
-#List
 
-def _get_list(key):
-    def get_list(self):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        return db.List(full_key)
-    return get_list
+class BaseField(object):
 
-#Dict
+    def __init__(self):
+        pass
 
-def _get_dict(key):
-    def get_dict(self):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        return db.Dict(full_key)
-    return get_dict
+    def contribute_to_class(self, cls, name):
+        self.key = name
+        #signals.pre_init.connect(self.instance_pre_init, sender=cls, weak=False)
+        setattr(cls, name, self)
 
-#Set
+    def __delete__(self, obj):
+        del(db[self.full_key])
 
-def _get_set(key):
-    def get_set(self):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        return db.Set(full_key)
-    return get_set
 
-#Sorted Set
-class Zset(object):
+class List(BaseField):
 
-    def __init__(self, key):
-        self.key = key
+    def __get__(self, obj, objname=None):
+        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
+        return db.List(self.full_key)
+
+    def __set__(self, obj, value):
+        if db.api.exists(self.full_key):
+            del(db[self.full_key])
+        db.List(self.full_key, value)
+
+
+class Dict(BaseField):
+
+    def __get__(self, obj, objname=None):
+        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
+        return db.Dict(self.full_key)
+
+    def __set__(self, obj, value):
+        if db.api.exists(self.full_key):
+            del(db[self.full_key])
+        db.Dict(self.full_key, value)
+
+
+class Set(BaseField):
+
+    def __get__(self, obj, objname=None):
+        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
+        return db.Set(self.full_key)
+
+    def __set__(self, obj, value):
+        '''value is an iterable'''
+        if db.api.exists(self.full_key):
+            del(db[self.full_key])
+        db.Set(self.full_key, value)
+
+class Zset(BaseField):
 
     def __get__(self, obj, objname=None):
         full_key = '%s:%s' % (obj.redis_key(), self.key)
         return db.SortedSet(full_key)
 
     def __set__(self, obj, value):
-        full_key = '%s:%s' % (obj.redis_key(), self.key)
-        db.SortedSet(full_key, value)
+        '''value is an iterable of key/score tuples'''
+        if db.api.exists(self.full_key):
+            del(db[self.full_key])
+        db.SortedSet(self.full_key, value)
 
-    def __delete__(self, obj):
-        full_key = '%s:%s' % (obj.redis_key(), self.key)
-        del(db[full_key])
-
-'''
-def _get_zset(key):
-    return Zset(key)
-
-    def get_zset(self):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        return db.SortedSet(full_key)
-    return get_zset
-'''
 
 class DredisMixin(object):
     '''Mixin class to go with models.Model
@@ -360,36 +372,13 @@ class DredisMixin(object):
         if persist_field:
             cls.add_to_class('%s_save' % key, _save_string(key, persist_field))
 
+    '''
     @classmethod
     def add_object(cls, key, persist_field=None):
-        '''Pickled objects'''
         cls.add_to_class(key, _get_object(key))
         cls.add_to_class('%s_set' % key, _set_object(key))
         cls.add_to_class('%s_getset' % key, _getset_object(key))
         if persist_field:
             cls.add_to_class('%s_save' % key, _save_object(key, persist_field))
 
-    @classmethod
-    def add_list(cls, key):
-        '''deals with <class 'redish.types.List'>'''
-        cls.add_to_class(key, _get_list(key))
-        #cls.add_to_class('%s_lpush' % key, _lpush(key))
-        #cls.add_to_class('%s_rpush' % key, _rpush(key))
-
-    @classmethod
-    def add_dict(cls, key):
-        '''<class 'redish.types.Dict'>'''
-        cls.add_to_class(key, _get_dict(key))
-        #cls.add_to_class('%s_update' % key, _update_dict(key))
-
-    @classmethod
-    def add_set(cls, key):
-        '''<class 'redish.types.Set'>'''
-        cls.add_to_class(key, _get_set(key))
-
-    @classmethod
-    def add_zset(cls, key):
-        '''<class 'redish.types.SortedSet'>'''
-        cls.add_to_class(key, Zset(key))
-
-
+    '''
