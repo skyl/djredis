@@ -1,6 +1,6 @@
 import pickle
 from functools import partial
-from django.db import models
+#from django.db import models
 
 from redish.client import Client
 from redish import serialization
@@ -39,6 +39,13 @@ def _decr_class(key):
         return db.api.decr(full_key)
     return decr_class
 
+def _del_incr_class(key):
+    @classmethod
+    def del_incr_class(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        del(db[full_key])
+    return del_incr_class
+
 # Plain String
 
 def _get_str_class(key):
@@ -51,6 +58,13 @@ def _get_str_class(key):
             db[full_key] = ''
             return ''
     return get_str_class
+
+def _del_string_class(key):
+    @classmethod
+    def del_string_class(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        del(db[full_key])
+    return del_string_class
 
 # Object
 
@@ -292,10 +306,12 @@ class DredisMixin(object):
         setattr(cls, key, _get_incr_class(key))
         setattr(cls, '%s_incr' % key, _incr_class(key))
         setattr(cls, '%s_decr' % key, _decr_class(key))
+        setattr(cls, '%s_delete' % key, _del_incr_class(key))
 
     @classmethod
     def add_string_to_class(cls, key):
         setattr(cls, key, _get_str_class(key))
+        setattr(cls, '%s_delete' % key, _del_string_class(key))
 
     @classmethod
     def add_object_to_class(cls, key):
