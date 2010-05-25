@@ -236,13 +236,32 @@ def _get_set(key):
     return get_set
 
 #Sorted Set
+class Zset(object):
 
+    def __init__(self, key):
+        self.key = key
+
+    def __get__(self, obj, objname=None):
+        full_key = '%s:%s' % (obj.redis_key(), self.key)
+        return db.SortedSet(full_key)
+
+    def __set__(self, obj, value):
+        full_key = '%s:%s' % (obj.redis_key(), self.key)
+        db.SortedSet(full_key, value)
+
+    def __delete__(self, obj):
+        full_key = '%s:%s' % (obj.redis_key(), self.key)
+        del(db[full_key])
+
+'''
 def _get_zset(key):
+    return Zset(key)
+
     def get_zset(self):
         full_key = '%s:%s' % (self.redis_key(), key)
         return db.SortedSet(full_key)
     return get_zset
-
+'''
 
 class DredisMixin(object):
     '''Mixin class to go with models.Model
@@ -371,6 +390,6 @@ class DredisMixin(object):
     @classmethod
     def add_zset(cls, key):
         '''<class 'redish.types.SortedSet'>'''
-        cls.add_to_class(key, _get_zset(key))
+        cls.add_to_class(key, Zset(key))
 
 
