@@ -225,6 +225,30 @@ class BaseField(object):
     def __delete__(self, obj):
         del(db[self.full_key])
 
+    def getset(self):
+        print 'yo'
+
+
+class String(BaseField):
+
+    def __get__(self, obj, objname=None):
+        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
+        return db.get(self.full_key, None)
+
+    def __set__(self, obj, value):
+        db.api.set(self.full_key, value)
+
+
+class Object(BaseField):
+
+    def __get__(self, obj, objname=None):
+        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
+        return db_pickle.Object(self.full_key)
+
+    def __set__(self, obj, value):
+        #key = self.full_key
+        db_pickle.Object(self.full_key, value).set(value)
+
 
 class List(BaseField):
 
