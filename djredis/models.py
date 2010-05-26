@@ -111,111 +111,10 @@ def _get_zset_class(key):
     return get_zset
 
 
-######
-#Instance-level fields
-#######################
-
-#Incr/Decr
-def _get_incr(key):
-    def get_incr_value(self):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        return int(db.api.get(full_key)) if db.api.get(full_key) else 0
-    return get_incr_value
-
-def _incr(key):
-    def incr(self):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        return db.api.incr(full_key)
-    return incr
-
-def _decr(key):
-    def decr(self):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        return db.api.decr(full_key)
-    return decr
-
-def _save_incr(key, persist_field):
-    def redis_save(self):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        value = int(db.api.get(full_key)) if db.api.get(full_key) else 0
-        setattr(self, persist_field, value)
-        self.save()
-    return redis_save
-
-#String
-
-def _get_string(key):
-    def get(self):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        if db.api.get(full_key):
-            return db[full_key]
-        else:
-            db[full_key] = ''
-            return ''
-    return get
-
-def _append_string(key):
-    def append(self, value):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        if not full_key in db:
-            db.api.set(full_key, value)
-        else:
-            db.api.append(full_key, value)
-        return db.api.get(full_key)
-
-    return append
-
-def _exists_string(key):
-    def exists(self):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        return db.api.exists(full_key)
-    return exists
-
-def _save_string(key, persist_field):
-    def redis_save(self):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        value = db.api.get(full_key) if db.api.get(full_key) else ''
-        setattr(self, persist_field, value)
-        self.save()
-    return redis_save
-
-#Object
-
-def _get_object(key):
-    def get(self):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        if db.api.get(full_key):
-            return db_pickle[full_key]
-        else:
-            return None
-    return get
-
-def _set_object(key):
-    def set(self, value):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        db_pickle[full_key] = value
-        #return value
-    return set
-
-def _getset_object(key):
-    def getset(self, obj):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        return pickle.loads(db.api.getset(full_key, pickle.dumps(obj)))
-    return getset
-
-def _save_object(key, persist_field):
-    def redis_save(self):
-        full_key = '%s:%s' % (self.redis_key(), key)
-        value = db.api.get(full_key) if db.api.get(full_key) else ''
-        setattr(self, persist_field, value)
-        self.save()
-    return redis_save
-
-
 class BaseField(object):
 
-    def __init__(self):
-        pass
+    def __init__(self, persist_field=None):
+        self.persist_field = persist_field
 
     def contribute_to_class(self, cls, name):
         self.key = name
@@ -223,31 +122,54 @@ class BaseField(object):
         #signals.pre_init.connect(self.instance_pre_init, sender=cls, weak=False)
         setattr(cls, name, self)
 
-    def __get__(self, obj, objname=None):
+    '''
+        if self.persist_field:
+            setattr(cls, '%s_save' % self.key, self._save)
+
+    # right now, there is no support for persistence, more thought needed.
+    # the following would just store the repr() in a TextField say ..
+    # adhoc hacking of the save() method/signals is probably going to be
+    # the right level of abstraction for now
+
+    def _save(self):
+        if hasattr(self, 'obj'):
+            setattr(self.obj, self.persist_field, self.__get__(self.obj))
+            self.obj.save()
+
+        else:
+            raise AttributeError(u"The descriptor has not been prepared")
+    '''
+
+    def _prepare_descriptor(self, obj):
         if obj is None:
             raise AttributeError(u"%s must be accessed via instance" % self.key)
+        self.obj = obj
         self.full_key = '%s:%s' % (obj.redis_key(), self.key)
+
+    def __get__(self, obj, objname=None):
+        self._prepare_descriptor(obj)
 
     def __set__(self, obj, value):
-        if obj is None:
-            raise AttributeError(u"%s must be accessed via instance" % self.key)
-        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
+        self._prepare_descriptor(obj)
+
+        if db.api.exists(self.full_key):
+            del(db[self.full_key])
 
     def __delete__(self, obj):
-        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
-        del(db[self.full_key])
+        self._prepare_descriptor(obj)
 
+        del(db[self.full_key])
 
 
 class Incr(BaseField):
 
     def __get__(self, obj, objname=None):
-        key = '%s:%s' % (obj.redis_key(), self.key)
-        return db.Incr(key)
+        super(Incr, self).__get__(obj, objname)
+        return db.Incr(self.full_key)
 
     def __set__(self, obj, value):
-        key = '%s:%s' % (obj.redis_key(), self.key)
-        db.Incr(key).set(value)
+        super(Incr, self).__set__(obj, value)
+        db.Incr(self.full_key).set(value)
 
 
 class String(BaseField):
@@ -264,66 +186,58 @@ class String(BaseField):
 class Object(BaseField):
 
     def __get__(self, obj, objname=None):
-        key = '%s:%s' % (obj.redis_key(), self.key)
-        return db.Object(key)
+        super(Object, self).__get__(obj, objname)
+        return db.Object(self.full_key)
 
     def __set__(self, obj, value):
-        key = '%s:%s' % (obj.redis_key(), self.key)
-        db.Object(key).set(value)
+        super(Object, self).__set__(obj, value)
+        db.Object(self.full_key).set(value)
 
 
 class List(BaseField):
 
     def __get__(self, obj, objname=None):
-        key = '%s:%s' % (obj.redis_key(), self.key)
-        return db.List(key)
+        super(List, self).__get__(obj, objname)
+        return db.List(self.full_key)
 
     def __set__(self, obj, value):
-        key = '%s:%s' % (obj.redis_key(), self.key)
-        if db.api.exists(key):
-            del(db[key])
-        db.List(key, value)
+        super(List, self).__set__(obj, value)
+        db.List(self.full_key, value)
 
 
 class Dict(BaseField):
 
     def __get__(self, obj, objname=None):
-        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
-        key = '%s:%s' % (obj.redis_key(), self.key)
+        super(Dict, self).__get__(obj, objname)
         return db.Dict(self.full_key)
 
     def __set__(self, obj, value):
-        key = '%s:%s' % (obj.redis_key(), self.key)
-        if db.api.exists(key):
-            del(db[key])
-        db.Dict(key, value)
+        super(Dict, self).__set__(obj, value)
+        db.Dict(self.full_key, value)
 
 
 class Set(BaseField):
 
     def __get__(self, obj, objname=None):
-        key = '%s:%s' % (obj.redis_key(), self.key)
-        return db.Set(key)
+        super(Set, self).__get__(obj, objname)
+        return db.Set(self.full_key)
 
     def __set__(self, obj, value):
         '''value is an iterable'''
-        key = '%s:%s' % (obj.redis_key(), self.key)
-        if db.api.exists(key):
-            del(db[key])
-        db.Set(key, value)
+        super(Set, self).__set__(obj, value)
+        db.Set(self.full_key, value)
+
 
 class Zset(BaseField):
 
     def __get__(self, obj, objname=None):
-        key = '%s:%s' % (obj.redis_key(), self.key)
-        return db.SortedSet(key)
+        super(Zset, self).__get__(obj, objname)
+        return db.SortedSet(self.full_key)
 
     def __set__(self, obj, value):
         '''value is an iterable of key/score tuples'''
-        key = '%s:%s' % (obj.redis_key(), self.key)
-        if db.api.exists(key):
-            del(key)
-        db.SortedSet(key, value)
+        super(Zset, self).__set__(obj, value)
+        db.SortedSet(self.full_key, value)
 
 
 class DredisMixin(object):
@@ -402,34 +316,3 @@ class DredisMixin(object):
     def add_zset_to_class(cls, key):
         setattr(cls, key, _get_zset_class(key))
 
-
-    ######
-    #Add instance methods
-    #####################
-
-    @classmethod
-    def add_incr(cls, key, persist_field=None):
-        cls.add_to_class(key, _get_incr(key))
-        cls.add_to_class('%s_incr' % key, _incr(key))
-        cls.add_to_class('%s_decr' % key, _decr(key))
-        if persist_field:
-            cls.add_to_class('%s_save' % key, _save_incr(key, persist_field))
-
-    @classmethod
-    def add_string(cls, key, persist_field=None):
-        cls.add_to_class(key, _get_string(key))
-        cls.add_to_class('%s_append' % key, _append_string(key))
-        cls.add_to_class('%s_exists' % key, _exists_string(key))
-        if persist_field:
-            cls.add_to_class('%s_save' % key, _save_string(key, persist_field))
-
-    '''
-    @classmethod
-    def add_object(cls, key, persist_field=None):
-        cls.add_to_class(key, _get_object(key))
-        cls.add_to_class('%s_set' % key, _set_object(key))
-        cls.add_to_class('%s_getset' % key, _getset_object(key))
-        if persist_field:
-            cls.add_to_class('%s_save' % key, _save_object(key, persist_field))
-
-    '''
