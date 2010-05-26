@@ -219,84 +219,111 @@ class BaseField(object):
 
     def contribute_to_class(self, cls, name):
         self.key = name
+        self.model = cls
         #signals.pre_init.connect(self.instance_pre_init, sender=cls, weak=False)
         setattr(cls, name, self)
 
+    def __get__(self, obj, objname=None):
+        if obj is None:
+            raise AttributeError(u"%s must be accessed via instance" % self.key)
+        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
+
+    def __set__(self, obj, value):
+        if obj is None:
+            raise AttributeError(u"%s must be accessed via instance" % self.key)
+        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
+
     def __delete__(self, obj):
+        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
         del(db[self.full_key])
 
-    def getset(self):
-        print 'yo'
+
+
+class Incr(BaseField):
+
+    def __get__(self, obj, objname=None):
+        key = '%s:%s' % (obj.redis_key(), self.key)
+        return db.Incr(key)
+
+    def __set__(self, obj, value):
+        key = '%s:%s' % (obj.redis_key(), self.key)
+        db.Incr(key).set(value)
 
 
 class String(BaseField):
 
     def __get__(self, obj, objname=None):
-        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
-        return db.get(self.full_key, None)
+        super(String, self).__get__(obj, objname)
+        return db.String(self.full_key)
 
     def __set__(self, obj, value):
+        super(String, self).__set__(obj, value)
         db.api.set(self.full_key, value)
 
 
 class Object(BaseField):
 
     def __get__(self, obj, objname=None):
-        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
-        return db_pickle.Object(self.full_key)
+        key = '%s:%s' % (obj.redis_key(), self.key)
+        return db.Object(key)
 
     def __set__(self, obj, value):
-        #key = self.full_key
-        db_pickle.Object(self.full_key, value).set(value)
+        key = '%s:%s' % (obj.redis_key(), self.key)
+        db.Object(key).set(value)
 
 
 class List(BaseField):
 
     def __get__(self, obj, objname=None):
-        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
-        return db.List(self.full_key)
+        key = '%s:%s' % (obj.redis_key(), self.key)
+        return db.List(key)
 
     def __set__(self, obj, value):
-        if db.api.exists(self.full_key):
-            del(db[self.full_key])
-        db.List(self.full_key, value)
+        key = '%s:%s' % (obj.redis_key(), self.key)
+        if db.api.exists(key):
+            del(db[key])
+        db.List(key, value)
 
 
 class Dict(BaseField):
 
     def __get__(self, obj, objname=None):
         self.full_key = '%s:%s' % (obj.redis_key(), self.key)
+        key = '%s:%s' % (obj.redis_key(), self.key)
         return db.Dict(self.full_key)
 
     def __set__(self, obj, value):
-        if db.api.exists(self.full_key):
-            del(db[self.full_key])
-        db.Dict(self.full_key, value)
+        key = '%s:%s' % (obj.redis_key(), self.key)
+        if db.api.exists(key):
+            del(db[key])
+        db.Dict(key, value)
 
 
 class Set(BaseField):
 
     def __get__(self, obj, objname=None):
-        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
-        return db.Set(self.full_key)
+        key = '%s:%s' % (obj.redis_key(), self.key)
+        return db.Set(key)
 
     def __set__(self, obj, value):
         '''value is an iterable'''
-        if db.api.exists(self.full_key):
-            del(db[self.full_key])
-        db.Set(self.full_key, value)
+        key = '%s:%s' % (obj.redis_key(), self.key)
+        if db.api.exists(key):
+            del(db[key])
+        db.Set(key, value)
 
 class Zset(BaseField):
 
     def __get__(self, obj, objname=None):
-        full_key = '%s:%s' % (obj.redis_key(), self.key)
-        return db.SortedSet(full_key)
+        key = '%s:%s' % (obj.redis_key(), self.key)
+        return db.SortedSet(key)
 
     def __set__(self, obj, value):
         '''value is an iterable of key/score tuples'''
-        if db.api.exists(self.full_key):
-            del(db[self.full_key])
-        db.SortedSet(self.full_key, value)
+        key = '%s:%s' % (obj.redis_key(), self.key)
+        if db.api.exists(key):
+            del(key)
+        db.SortedSet(key, value)
 
 
 class DredisMixin(object):
