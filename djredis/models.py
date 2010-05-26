@@ -8,11 +8,12 @@ from redish import serialization
 
 # override and divide and balance with settings?
 # db = Client(host="localhost", port=6379, db="") # default settings.
+# should also consider making the db non-global, local to the instance
+# and configurable in a more fine-grained way
 
 db = Client(serializer=serialization.Plain())
 db_pickle = Client(serializer=serialization.Pickler())
 db_json = Client(serializer=serialization.JSON())
-
 
 
 ######
@@ -21,65 +22,20 @@ db_json = Client(serializer=serialization.JSON())
 
 # INCR
 
-def _get_incr_class(key):
-    @classmethod
-    def get_incr_value(cls):
-        full_key = '%s:%s' % (cls.redis_base(), key)
-        return int(db.api.get(full_key)) if db.api.get(full_key) else 0
-    return get_incr_value
-
-def _incr_class(key):
-    @classmethod
-    def incr_class(cls):
-        full_key = '%s:%s' % (cls.redis_base(), key)
-        return db.api.incr(full_key)
-    return incr_class
-
-def _decr_class(key):
-    @classmethod
-    def decr_class(cls):
-        full_key = '%s:%s' % (cls.redis_base(), key)
-        return db.api.decr(full_key)
-    return decr_class
+def _get_incr_class(cls, key):
+    full_key = '%s:%s' % (cls.redis_base(), key)
+    return db.Incr(full_key)
 
 # Plain String
 
-def _get_str_class(key):
-    @classmethod
-    def get_str_class(cls):
-        full_key = '%s:%s' % (cls.redis_base(), key)
-        if db.api.get(full_key):
-            return db[full_key]
-        else:
-            db[full_key] = ''
-            return ''
-    return get_str_class
+def _get_str_class(cls, key):
+    full_key = '%s:%s' % (cls.redis_base(), key)
+    return db.String(full_key)
 
 # Object
-
-def _get_object_class(key):
-    @classmethod
-    def get_object_class(cls):
-        full_key = '%s:%s' % (cls.redis_base(), key)
-        if db.api.get(full_key):
-            return db_pickle[full_key]
-        else:
-            return None
-    return get_object_class
-
-def _set_object_class(key):
-    @classmethod
-    def set_object_class(cls, value):
-        full_key = '%s:%s' % (cls.redis_base(), key)
-        db_pickle[full_key] = value
-    return set_object_class
-
-def _getset_object_class(key):
-    @classmethod
-    def getset(cls, obj):
-        full_key = '%s:%s' % (cls.redis_base(), key)
-        return pickle.loads(db.api.getset(full_key, pickle.dumps(obj)))
-    return getset
+def _get_object_class(cls, key):
+    full_key = '%s:%s' % (cls.redis_base(), key)
+    return db.Object(full_key)
 
 #List
 def _get_list_class(cls, key):
@@ -133,11 +89,10 @@ class BaseField(object):
 
     def _prepare_descriptor(self, obj):
         if obj is None:
-            self.full_key = '%s:%s' % (self.model.redis_base(), self.key)
-            #raise AttributeError(u"%s must be accessed via instance" % self.key)
-        else:
-            self.obj = obj
-            self.full_key = '%s:%s' % (obj.redis_key(), self.key)
+            raise AttributeError(u"%s must be accessed via instance" % self.key)
+
+        self.obj = obj
+        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
 
     def __get__(self, obj, objname=None):
         self._prepare_descriptor(obj)
@@ -292,20 +247,15 @@ class DredisMixin(object):
 
     @classmethod
     def add_incr_to_class(cls, key):
-        setattr(cls, key, _get_incr_class(key))
-        setattr(cls, '%s_incr' % key, _incr_class(key))
-        setattr(cls, '%s_decr' % key, _decr_class(key))
+        setattr(cls, key, _get_incr_class(cls, key))
 
     @classmethod
     def add_string_to_class(cls, key):
-        setattr(cls, key, _get_str_class(key))
+        setattr(cls, key, _get_str_class(cls, key))
 
     @classmethod
     def add_object_to_class(cls, key):
-        '''Pickled objects'''
-        setattr(cls, key, _get_object_class(key))
-        setattr(cls, '%s_set' % key, _set_object_class(key))
-        setattr(cls, '%s_getset' % key, _getset_object_class(key))
+        setattr(cls, key, _get_object_class(cls, key))
 
     @classmethod
     def add_list_to_class(cls, key):
