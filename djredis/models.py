@@ -8,9 +8,12 @@ from redish import serialization
 
 # override and divide and balance with settings?
 # db = Client(host="localhost", port=6379, db="") # default settings.
+
 db = Client(serializer=serialization.Plain())
 db_pickle = Client(serializer=serialization.Pickler())
 db_json = Client(serializer=serialization.JSON())
+
+
 
 ######
 #Class-level fields
@@ -79,36 +82,24 @@ def _getset_object_class(key):
     return getset
 
 #List
-def _get_list_class(key):
-    @classmethod
-    def get_list(cls):
-        full_key = '%s:%s' % (cls.redis_base(), key)
-        return db.List(full_key)
-    return get_list
+def _get_list_class(cls, key):
+    full_key = '%s:%s' % (cls.redis_base(), key)
+    return db.List(full_key)
 
 #Dict
-def _get_dict_class(key):
-    @classmethod
-    def get_dict(cls):
-        full_key = '%s:%s' % (cls.redis_base(), key)
-        return db.Dict(full_key)
-    return get_dict
+def _get_dict_class(cls, key):
+    full_key = '%s:%s' % (cls.redis_base(), key)
+    return db.Dict(full_key)
 
 #Set
-def _get_set_class(key):
-    @classmethod
-    def get_set(cls):
-        full_key = '%s:%s' % (cls.redis_base(), key)
-        return db.Set(full_key)
-    return get_set
+def _get_set_class(cls, key):
+    full_key = '%s:%s' % (cls.redis_base(), key)
+    return db.Set(full_key)
 
 #SortedSet
-def _get_zset_class(key):
-    @classmethod
-    def get_zset(cls):
-        full_key = '%s:%s' % (cls.redis_base(), key)
-        return db.SortedSet(full_key)
-    return get_zset
+def _get_zset_class(cls, key):
+    full_key = '%s:%s' % (cls.redis_base(), key)
+    return db.SortedSet(full_key)
 
 
 class BaseField(object):
@@ -142,9 +133,11 @@ class BaseField(object):
 
     def _prepare_descriptor(self, obj):
         if obj is None:
-            raise AttributeError(u"%s must be accessed via instance" % self.key)
-        self.obj = obj
-        self.full_key = '%s:%s' % (obj.redis_key(), self.key)
+            self.full_key = '%s:%s' % (self.model.redis_base(), self.key)
+            #raise AttributeError(u"%s must be accessed via instance" % self.key)
+        else:
+            self.obj = obj
+            self.full_key = '%s:%s' % (obj.redis_key(), self.key)
 
     def __get__(self, obj, objname=None):
         self._prepare_descriptor(obj)
@@ -245,22 +238,36 @@ class DredisMixin(object):
 
     ex::
 
+        import djredis.models
+
         class C(models.Model, DredisMixin):
             ...
+
+            # add you instance descriptors declaratively
+            counter = djredis.models.Incr()
+            myzset = djredis.models.Zset()
+
             # optionally add your own key
             def redis_key(self):
                 return 'unique_space:%s' % (self.id)
 
-        C.add_incr(C, 'timesfavorited')
 
-        >>> c = C()
-        >>> c.timesfavorited_incr()
-        1
-        >>> c.timesfavorited()
-        1
-        >>> c.timesfavorited_decr()
+        >>> c = C.objects.get(...) # get an object that has been saved
+        >>> c.counter
         0
+        >>> c.counter.incr()
+        1
+        >>> c.counter.decr()
+        0
+        >>> c.myzset
+        <SortedSet: []>
+        >>> c.myzset.add('foo', 10)
+        True
+        >>> c.myzset
+        <SortedSet: ['foo']>
+
     '''
+
 
     ####
     #Base mixin methods
@@ -302,17 +309,17 @@ class DredisMixin(object):
 
     @classmethod
     def add_list_to_class(cls, key):
-        setattr(cls, key, _get_list_class(key))
+        setattr(cls, key, _get_list_class(cls, key))
 
     @classmethod
     def add_dict_to_class(cls, key):
-        setattr(cls, key, _get_dict_class(key))
+        setattr(cls, key, _get_dict_class(cls, key))
 
     @classmethod
     def add_set_to_class(cls, key):
-        setattr(cls, key, _get_set_class(key))
+        setattr(cls, key, _get_set_class(cls, key))
 
     @classmethod
     def add_zset_to_class(cls, key):
-        setattr(cls, key, _get_zset_class(key))
+        setattr(cls, key, _get_zset_class(cls, key))
 
