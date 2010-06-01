@@ -9,7 +9,13 @@ http://github.com/antirez/redis
 
 http://github.com/andymccurdy/redis-py
 
+I've added a couple of types to the main redish, hopefully we can get these
+put into:
 http://github.com/ask/redish
+
+For right now, we have to run djredish with my fork:
+http://github.com/skyl/redish.git
+
 
 The DredisMixin Class
 =====================
@@ -19,162 +25,146 @@ that returns the unique keyspace for the instance.
 
 ::
 
-  from djredis.models import DredisMixin
+    from djredis.models import DredisMixin
+    import djredis.models
 
-  class Blog(models.Model, DredisMixin): # inherit from the mixin class
-      author = models.ForeignKey('Author')
-      title = models.CharField(max_length=200)
-      ...
-
+    class Blog(models.Model, DredisMixin): # inherit from the mixin class
+        # use django's normal models stuff
+        author = models.ForeignKey('Author')
+        title = models.CharField(max_length=200)
+        
+        # add some redis fields to the model instances declaratively:
+        mycounter = djredis.models.Incr()
+        mystring = djredis.models.String()
+        myobject = djredis.models.Object()
+        mydict = djredis.models.Dict()
+        mylist = djredis.models.List()
+        myset = djredis.models.Set()
+        myzset = djredis.models.Zset()
+     
       # optionally add a unique keyspace for the instance - default is shown below
       def redis_key(self):
           return '%s:%s:%s' % (self._meta.app_label, self._meta.module_name, self.pk)
 
-  Blog.add_incr('viewcount') # add the viewcount methods to your instances
+    # add table-level redis fields to the class
+    Blog.add_incr_to_class('classincr')
+    Blog.add_string_to_class('classstring')
+    Blog.add_object_to_class('classobject')
+    Blog.add_dict_to_class('classdict')
+    Blog.add_list_to_class('classlist')
+    Blog.add_set_to_class('classset')
+    Blog.add_zset_to_class('classzset')
 
+``djredis.models.X()`` is a data descriptor instance that has `__get__`, `__set__` and
+`__delete__` defined.  So, we can now grab a Blog instance and get and set the
+attributes that we created in our model definition.
 
-The call to ``.add_incr('viewcount')`` gives us 3 methods on our instances,
-``viewcount()`` retrieves the viewcount, 
-``viewcount_incr()`` adds 1 to the viewcount, 
-``viewcount_decr()`` subtracts 1 from the viewcount.
+``djredis.models.Incr()``, a descriptor for redish.types.Incr::
 
-Using your model from the shell, instances should now have these new attrs:
-
-::
-
-    >>> b = Blog.objects.get(..) # get a Blog instance
-    >>> b.viewcount()
+    >>> b = Blog.objects.get(...) # get a blog instance
+    >>> b.mycounter
     0
-    >>> b.viewcount_incr()
-    1
-    >>> b.viewcount_incr()
-    2
-    >>> b.viewcount()
-    2
-    >>> b.viewcount_decr()
-    1
+    >>> type(b.mycounter)
+    <class 'redish.types.Incr'>
+    >>> b.mycounter.incr(5)
+    5
+    >>> b.mycounter.decr(1)
+    4
+    >>> del(b.mycounter)
+    >>> b.mycounter
+    0
+    >>> b.mycounter = 10
+    >>> type(b.mycounter)
+    <class 'redish.types.Incr'>
+    
+``djredis.models.String()``, a descriptor for redish.types.String::
 
-Note that you should not run your redis methods on unsaved model instances.
-The pk is used in building the redis key.  So, running the
-methods on unsaved instances will save the data in redis under say,
-``content:blog:None`` instead of say ``content:blog:53``::
+    >>> b.mystring
+    ''
+    >>> type(b.mystring)
+    <class 'redish.types.String'>
+    >>> b.mystring = 'foobar'
+    >>> b.mystring.getset('bar')
+    'foobar'
+    >>> b.mystring
+    'bar'
+    >>> del(b.mystring)
+    >>> type(b.mystring)
+    <class 'redish.types.String'>
+
+``djredis.models.Object()``, a descriptor for redish.types.Object, able to
+store any picklable python objects::
+
+    >>> b.myobject
+    None
+    >>> type(b.myobject)
+    <class 'redish.types.Object'>
+    >>> b.myobject = int
+    >>> b.myobject
+    <type 'int'>
+    >>> b.myobject.getset({})
+    <type 'int'>
+    >>> b.myobject
+    {}
+    >>> type(b.myobject)
+    <class 'redish.types.Object'>
+    >>> del(b.myobject)
+    >>> b.myobject
+    None
+
+``Dict``, ``List``, ``Set`` and ``Zset`` work similarly.  They are also data
+descriptors that allow
+access to their respective ``redish.types`` and should be documented as the 
+underlying apis stabilize.
+
+Note that you should not use the descriptors on unsaved model instances.
+The pk is used in building the redis key.  So, setting and accessing
+the attributes on an unsaved model instance will save the data in redis under say,
+``content:blog:None:mylist`` instead of say ``content:blog:53:mylist``::
 
     >>> b = Blog()
-    >>> b.mylist().append('bar')
+    >>> b.mylist.append('bar')
     >>> b.redis_keys()
     ['content:blog:None:mylist']
+    >>> b.mylist.name
+    'content:blog:None:mylist'
 
 This behavior serves no apparent purpose and will probably be changed.
 
-You may create a field in your model to persist the data in your rdbms.
-Pass the name of this field as a string to ``.add_incr`` and you get another method, ``_save()``.
-Checkout out the same example modified to use this functionality::
-
-  from djredis.models import DredisMixin
-
-  class Blog(models.Model, DredisMixin): # inherit from the mixin class
-      ...
-      views = models.PositiveIntegerField(blank=True, null=True)
-      ...
-
-  Blog.add_incr('viewcount', 'views') # add the viewcount methods to your instances
-
-Now you can save the number to the rdbms when you want::
-
-    >>> b=Blog.objects.all()[0] # get an object that is already in the db
-    >>> b.viewcount()
-    0
-    >>> b.viewcount_incr()
-    1
-    >>> b.viewcount_incr()
-    2
-    >>> b.views # still none until we save
-    >>> b.viewcount_save()
-    >>> b.views # now that we have saved, we get the number back
-    2
-    >>> Blog.objects.all().order_by('views') # and we can use the ORM on this field
-
-
-Other types of fields
-~~~~~~~~~~~~~~~~~~~~~
-
-``MyModel.add_string('fieldname', persist_field=None)`` corresponds to string values
-that are not serialized with pickle::
-
-    inst.fieldname() # returns value
-    inst.fieldname_append('mystr') # appends 'mystr' to the string at fieldname
-    inst.fieldname_exists() # True/False
-    # if you supply a persist_field on your model, you can write with:
-    inst.fieldname_save()
-    # more to come
-
-``MyModel.add_object('fieldname')``.  Redis can actually store any picklable python objects::
-
-    inst.fieldname() # returns the object at the key.
-    inst.fieldname_set({'foo': barobject}) # puts the dict in the db, objs and all
-    inst.fieldname_getset({}) # sets the field to the python object, returning the current
-    # more to come
-
-``MyModel.add_list('fieldname')``.  Adds a redish list at fieldname::
-
-    inst.fieldname() # returns the redish list
-    # this object can be interacted with directly:
-    inst.fieldname().append('some string')
-    inst.fieldname().appendleft('baz')
-    # see http://github.com/ask/redish
-
-``MyModel.add_dict('fieldname')``.  Adds a callable at `fieldname`
-returning a redish.types.Dict::
-
-    inst.fieldname() # returns the redish dict
-    inst.fieldname().update({'foo':'bar'})
-    # work with this object directly:
-    inst.fieldname().pop(dict_key) # removes the k/v at dict_key and returns the value
-
-``MyModel.add_set('fieldname')``.  Adds a callable at `fieldname`
-returning a redish.types.Set::
-
-    inst.fieldname() # returns the redish set
-    # work with this object directly
-    inst.fieldname().add('somestring')
-    inst.fieldname().intersection(other_set) # returns a new set
-
-``MyModel.add_zset('fieldname')``.  Adds a callable at `fieldname`
-returning a redish.types.SortedSet::
-
-    inst.fieldname() # returns the set
-    # work with this object
-    inst.fieldname().add('some string') # returns True if added else False
 
 
 Table-level fields
 ~~~~~~~~~~~~~~~~~~
 
-Redis methods can also be added as classmethods.
-The same api is evolving for this.  The persist_field option does not exist
-for these calls.  To add classmethods to your class, the following methods are currently
-available.
+Redis types can also be added as attributes of the class using classmethods.
+The attributes on the class that are created by the calls to the class methods
+are not descriptors however.  Therefore, one must be careful not to try to
+use set or delete these attributes.  Setting these attributes directly is not
+supported.  One may clear the value in redis by calling ``MyModel.myname_delete()``.
 
 ``add_incr_to_class``.  After MyModel inherits from the mixin::
 
-    MyModel.add_incr_to_class('countername')
-    MyModel.countername() # returns the number, (0 if no key in db)
-    MyModel.countername_incr() # adds 1
-    MyModel.countername_decr() # subtracts 1
+    MyModel.add_incr_to_class('classincr')
+    MyModel.classincr # the redish.types.Incr object
+    MyModel.classincr.incr() # adds 1
+    MyModel.classincr.decr() # subtracts 1
+    # delete the value in the db
+    MyModel.classincr_delete()
     
-
 ``add_string_to_class``.  This is for adding an unpickled string field to your ModelClass::
 
     MyModel.add_string_to_class('foostring')
-    MyModel.foostring() # returns the string
+    MyModel.foostring # the redish.types.String object
+    MyModel.foostring_delete()
     # more to come
 
 ``add_object_to_class``.  For adding a pickled object to you ModelClass::
 
-    MyModel.add_object_to_class('myobject')
-    MyModel.myobject() # returns the stored object, None if the key has not been set.
-    MyModel.myobject_set(obj) # stores obj
-    MyModel.myobject_getset(obj) # returns the stored object and sets the value to obj
+    MyModel.add_object_to_class('classobject')
+    MyModel.classobject # the redish.types.Object object
+    MyModel.classobject_set(obj) # stores obj
+    MyModel.classobject_getset(obj) # returns the stored object and sets the value to obj
+    MyModel.classobject_delete() # remove the k/v from the db
 
 The following methods create callables that return redish objects.
 See the redish docs for more on how to interact with them.
@@ -182,28 +172,31 @@ See the redish docs for more on how to interact with them.
 ``add_list_to_class``.  Creates a callable on the class that returns a
 redish.types.List::
 
-    MyModel.add_list_to_class('mylist')
-    MyModel.mylist() # returns List object
-    MyModel.mylist().appendleft('foo') #appends the string to the head of the list
-    MyModel.mylist().popleft() # returns 'foo' and removes it from the db
+    MyModel.add_list_to_class('classlist')
+    MyModel.classlist # the redish.types.List object
+    MyModel.classlist.appendleft('foo') #appends the string to the head of the list
+    MyModel.classlist.popleft() # returns 'foo' and removes it from the db
+    MyModel.classlist_delete() # remove the k/v from redis
 
 ``add_dict_to_class``.  Creates a callable on the class that returns a
 redish.types.Dict::
 
-    MyModel.add_dict_to_class('mydict')
-    MyModel.mydict() # returns the Dict object
+    MyModel.add_dict_to_class('classdict')
+    MyModel.classdict() # the redish.types.Dict object
+    MyModel.classdict_delete()
 
 ``add_set_to_class``.  Creates a callable on the class that returns a
 redish.types.Set::
 
-    MyModel.add_set_to_class('myset')
-    MyModel.myset() # returns the Set object
+    MyModel.add_set_to_class('classset')
+    MyModel.classset # the redish.types.Set object
+    MyModel.classset_delete()
 
 ``add_zset_to_class``.  Creates a callable on the class that returns a
 redish.types.SortedSet::
 
-    MyModels.add_zset_to_class('myzset')
-    MyModel.myzset() # returns the SortedSet object
+    MyModels.add_zset_to_class('classzset')
+    MyModel.classzset() # the redish.types.SortedSet object
 
 
 Base methods

@@ -21,7 +21,6 @@ db_json = Client(serializer=serialization.JSON())
 ####################
 
 # INCR
-
 def _get_incr_class(cls, key):
     full_key = '%s:%s' % (cls.redis_base(), key)
     return db.Incr(full_key)
@@ -30,11 +29,12 @@ def _del_incr_class(key):
     @classmethod
     def del_incr_class(cls):
         full_key = '%s:%s' % (cls.redis_base(), key)
-        del(db[full_key])
+        if db.api.exists(full_key):
+            del(db[full_key])
     return del_incr_class
 
-# Plain String
 
+# Plain String
 def _get_str_class(cls, key):
     full_key = '%s:%s' % (cls.redis_base(), key)
     return db.String(full_key)
@@ -43,33 +43,80 @@ def _del_string_class(key):
     @classmethod
     def del_string_class(cls):
         full_key = '%s:%s' % (cls.redis_base(), key)
-        del(db[full_key])
+        if db.api.exists(full_key):
+            del(db[full_key])
     return del_string_class
+
 
 # Object
 def _get_object_class(cls, key):
     full_key = '%s:%s' % (cls.redis_base(), key)
     return db.Object(full_key)
 
+def _del_object_class(key):
+    @classmethod
+    def del_object_class(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        if db.api.exists(full_key):
+            del(db[full_key])
+    return del_object_class
+
+
 #List
 def _get_list_class(cls, key):
     full_key = '%s:%s' % (cls.redis_base(), key)
     return db.List(full_key)
+
+def _del_list_class(key):
+    @classmethod
+    def del_list_class(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        if db.api.exists(full_key):
+            del(db[full_key])
+    return del_list_class
+
 
 #Dict
 def _get_dict_class(cls, key):
     full_key = '%s:%s' % (cls.redis_base(), key)
     return db.Dict(full_key)
 
+def _del_dict_class(key):
+    @classmethod
+    def del_dict_class(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        if db.api.exists(full_key):
+            del(db[full_key])
+    return del_dict_class
+
+
 #Set
 def _get_set_class(cls, key):
     full_key = '%s:%s' % (cls.redis_base(), key)
     return db.Set(full_key)
 
+def _del_set_class(key):
+    @classmethod
+    def del_set_class(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        if db.api.exists(full_key):
+            del(db[full_key])
+    return del_set_class
+
+
 #SortedSet
 def _get_zset_class(cls, key):
     full_key = '%s:%s' % (cls.redis_base(), key)
     return db.SortedSet(full_key)
+
+def _del_zset_class(key):
+    @classmethod
+    def del_zset_class(cls):
+        full_key = '%s:%s' % (cls.redis_base(), key)
+        if db.api.exists(full_key):
+            del(db[full_key])
+    return del_zset_class
+
 
 
 class BaseField(object):
@@ -113,14 +160,13 @@ class BaseField(object):
 
     def __set__(self, obj, value):
         self._prepare_descriptor(obj)
-
         if db.api.exists(self.full_key):
             del(db[self.full_key])
 
     def __delete__(self, obj):
         self._prepare_descriptor(obj)
-
-        del(db[self.full_key])
+        if db.api.exists(self.full_key):
+            del(db[self.full_key])
 
 
 class Incr(BaseField):
@@ -261,33 +307,36 @@ class DredisMixin(object):
 
     @classmethod
     def add_incr_to_class(cls, key):
-        setattr(cls, key, _get_incr_class(key))
-        setattr(cls, '%s_incr' % key, _incr_class(key))
-        setattr(cls, '%s_decr' % key, _decr_class(key))
+        setattr(cls, key, _get_incr_class(cls, key))
         setattr(cls, '%s_delete' % key, _del_incr_class(key))
 
     @classmethod
     def add_string_to_class(cls, key):
-        setattr(cls, key, _get_str_class(key))
+        setattr(cls, key, _get_str_class(cls, key))
         setattr(cls, '%s_delete' % key, _del_string_class(key))
 
     @classmethod
     def add_object_to_class(cls, key):
         setattr(cls, key, _get_object_class(cls, key))
+        setattr(cls, '%s_delete' % key, _del_object_class(key))
 
     @classmethod
     def add_list_to_class(cls, key):
         setattr(cls, key, _get_list_class(cls, key))
+        setattr(cls, '%s_delete' % key, _del_list_class(key))
 
     @classmethod
     def add_dict_to_class(cls, key):
         setattr(cls, key, _get_dict_class(cls, key))
+        setattr(cls, '%s_delete' % key, _del_dict_class(key))
 
     @classmethod
     def add_set_to_class(cls, key):
         setattr(cls, key, _get_set_class(cls, key))
+        setattr(cls, '%s_delete' % key, _del_set_class(key))
 
     @classmethod
     def add_zset_to_class(cls, key):
         setattr(cls, key, _get_zset_class(cls, key))
+        setattr(cls, '%s_delete' % key, _del_zset_class(key))
 
