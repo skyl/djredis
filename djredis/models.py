@@ -184,7 +184,7 @@ class String(BaseField):
 
     def __get__(self, obj, objname=None):
         super(String, self).__get__(obj, objname)
-        return db.String(self.full_key)
+        return db.api.get(self.full_key)
 
     def __set__(self, obj, value):
         super(String, self).__set__(obj, value)
@@ -289,7 +289,7 @@ class DredisMixin(object):
     ###################
 
     def redis_key(self):
-        return '%s:%s:%s' % (self._meta.app_label, self._meta.module_name, self.pk)
+        return '%s:%s' % (self.__class__.redis_base(), self.pk)
 
     def redis_items(self):
         return db.items(pattern='%s*' % self.redis_key())
@@ -300,6 +300,24 @@ class DredisMixin(object):
     @classmethod
     def redis_base(cls):
         return '%s:%s' % (cls._meta.app_label, cls._meta.module_name)
+
+
+    # cache_fields
+
+    def load_djr(self):
+        """
+        Take what is in the db and refresh the cache.
+        """
+        for source,dest in self.cache_fields:
+            setattr(self, dest, getattr(self,source))
+
+    def write_djr(self):
+        """
+        Take what is in redis and write it to sql.
+        """
+        for dest,source in self.cache_fields:
+            setattr(self, dest, getattr(self,source))
+            self.save()
 
     ###
     #Add class methods
