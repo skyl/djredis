@@ -1,6 +1,8 @@
-import pickle
+import pickle, json
 from functools import partial
 #from django.db import models
+
+from django.core import serializers
 
 from redish.client import Client
 from redish import serialization
@@ -289,7 +291,7 @@ class DredisMixin(object):
     ###################
 
     def redis_key(self):
-        return '%s:%s' % (self.__class__.redis_base(), self.pk)
+        return '%s::%s' % (self.__class__.redis_base(), self.pk)
 
     def redis_items(self):
         return db.items(pattern='%s*' % self.redis_key())
@@ -299,7 +301,25 @@ class DredisMixin(object):
 
     @classmethod
     def redis_base(cls):
-        return '%s:%s' % (cls._meta.app_label, cls._meta.module_name)
+        return '%s::%s' % (cls._meta.app_label, cls._meta.module_name)
+
+    @classmethod
+    def get_dict(cls, pk):
+        key = "%s::%s::dict" % (cls.redis_base(), pk)
+        v = db.api.get(key)
+        if v:
+            v = json.loads(v)
+        else:
+            v = json.loads(serializers.serialize("json", cls.objects.filter(pk=pk)))[0]['fields']
+            db.api.set(key, json.dumps(v))
+        return v
+
+    @classmethod
+    def set_dict(cls, pk):
+        key = "%s::%s::dict" % (cls.redis_base(), pk)
+        db.api.set(key, json.dumps(
+                    json.loads(serializers.serialize("json", cls.objects.filter(pk=pk)))[0]['fields']
+        ))
 
 
     # cache_fields
